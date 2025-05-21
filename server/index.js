@@ -1,13 +1,13 @@
 import Fastify from "npm:fastify"
 import FastifyWebSocket from "npm:@fastify/websocket"
 import * as path from "jsr:@std/path"
-import config from "../shared/config.js";
+import config from "../config.js";
 
 const app = Fastify();
 const supportedMimeTypes = {
     html: "text/html",
     css: "text/css",
-    js: "text/js",
+    js: "text/javascript",
     json: "application/json",
 }
 
@@ -29,7 +29,7 @@ app.register(async function (fastify) {
         if (pathInfo.isFile) {
             const fileExtension = request.url.split('.').pop()
             if (!(fileExtension in supportedMimeTypes)) return reply.code(400).send(new Error(`Unsupported file type '${fileExtension}'`))
-            const file = await Deno.readFile(pathToFile)
+            const file = await Deno.readFile(filePath)
             reply.header('Content-Type', supportedMimeTypes[fileExtension])
             return reply.send(file)
         }
@@ -53,14 +53,9 @@ app.register(async function (fastify) {
         }
     })
 
-    fastify.get(`/shared/*`, (request, reply) => {
-        console.log(request.url)
-        reply.send("wip")
-    })
-
     fastify.get(`/${config.WEBSOCKET_PATH}`, { websocket: true }, (socket, request) => {
         socket.on("message", message => {
-            console.log(message)
+            console.log(message.toString())
             socket.send("server says hi")
         })
     })
