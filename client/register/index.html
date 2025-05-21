@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="module" src="/register/index.js" defer></script>
     <title>Register | Rock Paper Scissors</title>
 </head>
 
@@ -11,17 +12,17 @@
     <div class="login-container">
         <div class="input-container">
             <p>Username:</p>
-            <input type="text" id="username">
+            <input type="text" id="username" maxlength="20">
         </div>
         <div class="input-container">
             <p>Password:</p>
-            <input type="password" id="password">
+            <input type="password" id="password" maxlength="100">
         </div>
         <div class="input-container">
             <p>Confirm password</p>
-            <input type="password" id="confirm-password">
+            <input type="password" id="confirm-password" maxlength="100">
         </div>
-        <button class="register">Register</button>
+        <button id="register">Register</button>
     </div>
 </body>
 

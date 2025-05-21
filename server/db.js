@@ -11,7 +11,8 @@ await client.connect();
 await client.db("admin").command({ ping: 1 });
 console.log("Connected to MongoDB");
 
-const db = client.db(DB_NAME);
+const db = client.db(DB);
 const accounts = db.collection("accounts");
+const stats = db.collection("stats");
 
-export { db, accounts }
+export { db, accounts, stats }
