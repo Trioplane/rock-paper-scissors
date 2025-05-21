@@ -73,6 +73,10 @@ export function registerAPI() {
                 sessionToken
             })
         })
+
+        fastify.post('/api/create-room', async (request, reply) => {
+            // TODO
+        })
     })
     console.log("Registered API routes.")
 }

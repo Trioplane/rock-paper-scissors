@@ -76,13 +76,28 @@ class Room {
 export function registerWebSocketServer() {
     app.register(async function (fastify) {
         fastify.get(`/${config.WEBSOCKET_PATH}`, { websocket: true }, (socket, request) => {
-            socket.on("message", message => {
-                console.log(message.toString())
-                socket.send("server says hi")
+            socket.on("connection", ws => {
+                // on connect, join room, if no room, close socket
             })
 
-            socket.on('')
+            socket.on("message", message => {
+                const raw = message.toString();
+                const args = raw.split(" ");
+                const command = args.shift();
+
+                runCommands(command, args, socket)
+            })
+
+            socket.on('close', () => {
+                // on close
+                // check if room has 0 players, if yes, remove room
+            })
         })
         console.log(`WebSocketServer on /${config.WEBSOCKET_PATH}`)
     })
+}
+
+function runCommands(command, args, socket) {
+    // TODO
+    //switch (command)
 }
