@@ -13,7 +13,8 @@ export default {
     SESSION_TOKEN_EXPIRES_AT: 24 * 60 * 60 * 1000,
     GAME: {
         ROOM_CODE_LENGTH: 6,
-        IDLE_LOBBY_DELETION_TIME: 60 * 3000,
+        IDLE_LOBBY_DELETION_TIME: 60 * 3 * 1000,
+        ROOM_CLEANUP_LOOP_DELAY: 30 * 1000,
         MAX_ROUNDS: 4
     }
 }

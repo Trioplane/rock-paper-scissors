@@ -28,9 +28,6 @@ async function isValidSession(username, sessionToken) {
 		return false;
 	}
 
-    console.log("TRYING TO VERIFY SESSION TOKEN")
-    console.log(sessionToken)
-    console.log(account.session.token)
 	const isValidSessionToken = await bcrypt.verify(sessionToken, account.session.token);
 	if (!isValidSessionToken) return false;
 	return true;

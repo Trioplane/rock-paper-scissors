@@ -30,12 +30,15 @@ function generateRoomCode() {
 export function createRoom() {
     const roomCode = generateRoomCode();
     RoomsMap.set(roomCode, new Room(roomCode));
+    let rooms = "";
+    for (const room of RoomsMap.keys()) rooms += `${room} `
+    console.log(`Created new room, Active rooms: ${rooms}`)
     return roomCode;
 }
 
 function closeRoom(roomCode) {
     const playersInRoom = RoomsMap.get(roomCode).players
-    for (const player of playersInRoom) {
+    for (const player of playersInRoom.values()) {
         player.socket.close(4000, "Room Closed")
     }
 
@@ -74,7 +77,7 @@ class Room {
     }
 
     get canJoin() {
-        if (this.players.size >= 2) return false;
+        if (this.players.size >= 2 || this.status !== RoomStatus.WAITING) return false;
         return true
     }
 
@@ -89,7 +92,11 @@ class Room {
         this.players.set(player.username, player)
         PlayersMap.set(player.username, player)
 
-        this.sendMessage(`joined ${player.username}`)
+        let playerUsernames = "";
+        for (const player of this.players.values()) playerUsernames += `${player.username} `
+        this.sendMessage(`joined ${playerUsernames}`)
+
+        if (this.players.size === 2) this.startGame()
 
         return true
     }
@@ -103,6 +110,11 @@ class Room {
             const winner = this.players.values().next().value
             this.endGame(winner, true)
         }
+    }
+
+    startGame() {
+        this.sendMessage("start")
+        this.status = RoomStatus.ACTIVE
     }
 
     checkRoundWinner() {
@@ -201,6 +213,15 @@ export function registerWebSocketServer() {
             })
 
             socket.on('close', () => {
+                const room = RoomsMap.get(socket.rps.player.roomCode)
+                PlayersMap.delete(socket.rps.player.username)
+                if (!room) return
+                room.players.delete(socket.rps.player.username)
+                room.sendMessage(`left ${socket.rps.player.username}`)
+                
+                if (room.players.size === 0) {
+                    closeRoom(room.roomCode)
+                }
                 // on close
                 // check if room has 0 players, if yes, remove room
             })
@@ -220,15 +241,20 @@ async function runCommands(command, args, roomCode, socket) {
             const sessionToken = args[1]
 
             const room = RoomsMap.get(roomCode);
-
+            
             if (!room) return socket.close(4001, "Room not found.")
+            console.log(room)
+            console.log(room.players)
+            console.log("what???????")
             if (!room.canJoin) return socket.close(4001, "Room is full.")
+            console.log("what2???????")
 
             if (PlayersMap.get(username)) return socket.close(4001, "Player is already in a room.")
 
             if (!await isValidSession(username, sessionToken)) return socket.close(4001, "Invalid session.");
             
             const player = new Player(username, socket)
+            socket.rps = { player }
             const joined = room.join(player);
 
             if (!joined) return socket.close(4001, "Room is full.")
@@ -251,3 +277,5 @@ async function runCommands(command, args, roomCode, socket) {
         }
     }
 }
+
+setInterval(cleanupRooms, config.GAME.ROOM_CLEANUP_LOOP_DELAY)

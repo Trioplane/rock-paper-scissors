@@ -5,12 +5,13 @@ const joinRoomInput = document.querySelector("#join-room-input")
 const joinRoomButton = document.querySelector("#join-room-button")
 const joinContainer = document.querySelector("#join-container")
 const gameContainer = document.querySelector("#game-container")
-const _INFO = document.querySelector("#info")
+const infoContainer = document.querySelector("#info-container")
 
 let socket = null;
 let username = sessionStorage.getItem("username");
 let sessionToken = sessionStorage.getItem("sessionToken");
 let game = {
+    hasJoined: false,
     roomCode: ""
 }
 
@@ -82,14 +83,21 @@ async function handleMessages(command, args) {
     switch (command) {
         case 'joined': {
             const isMe = args[0] === username
-            if (isMe) {
+            if (!game.hasJoined) {
                 _ADDMESSAGE("Successfully joined room.")
-                
                 window.history.pushState(null, "", `?roomCode=${game.roomCode}`)
-                return
+                game.hasJoined = true;
             }
 
-            _ADDMESSAGE(`Player joined: ${args[0]}`);
+            _ADDMESSAGE(`Player joined: ${args[args.length - 1]}`);
+            _ADDMESSAGE(`Players: ${args.join(", ")}`);
+            break;
+        }
+        case 'start': {
+            break;
+        }
+        case 'left': {
+            _ADDMESSAGE(`Player left: ${args[0]}`)
             break;
         }
         default: {
@@ -101,6 +109,8 @@ async function handleMessages(command, args) {
 }
 
 function _ADDMESSAGE(message) {
-    _INFO.textContent += `${message}\n`
+    const p = document.createElement("p")
+    p.textContent = message
+    gameContainer.appendChild(p)
     console.log(message)
 }
