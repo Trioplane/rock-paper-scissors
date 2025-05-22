@@ -12,6 +12,8 @@ export default {
     MAX_PASSWORD_LENGTH: 100,
     SESSION_TOKEN_EXPIRES_AT: 24 * 60 * 60 * 1000,
     GAME: {
-        ROOM_CODE_LENGTH: 6
+        ROOM_CODE_LENGTH: 6,
+        IDLE_LOBBY_DELETION_TIME: 60 * 3000,
+        MAX_ROUNDS: 4
     }
 }

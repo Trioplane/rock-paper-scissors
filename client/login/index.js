@@ -43,13 +43,15 @@ async function login() {
                 console.log("weird error, report to administrators or try again")
                 break;
         }
+        return;
     }
 
-    const { data } = resJson;
+    const { username, sessionToken } = resJson.data;
     
     // store sessionToken and username to client so we can authorize ourselves
-    sessionStorage.setItem("username", data.username);
-	sessionStorage.setItem("sessionToken", data.sessionToken);
+    sessionStorage.setItem("username", username);
+	sessionStorage.setItem("sessionToken", sessionToken);
+    window.location.href = "/play"
 }
 
 loginButton.addEventListener('click', login)

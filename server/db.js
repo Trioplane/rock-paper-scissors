@@ -1,4 +1,5 @@
-import { MongoClient } from "npm:mongodb"
+import * as bcrypt from "jsr:@felix/bcrypt";
+import { MongoClient } from "npm:mongodb";
 
 const MONGODB_URI = Deno.env.get("MONGODB_URI") || "";
 const DB = Deno.env.get("DB") || "";
@@ -15,4 +16,24 @@ const db = client.db(DB);
 const accounts = db.collection("accounts");
 const stats = db.collection("stats");
 
-export { db, accounts, stats }
+async function isValidSession(username, sessionToken) {
+	const account = await accounts.findOne({ username });
+	if (account === null) return false;
+
+	if (!account?.session) return false;
+
+	const referenceTime = Date.now();
+	if (account.session.expires_at < referenceTime) {
+		await accounts.updateOne({ username }, { $unset: { session: "" } });
+		return false;
+	}
+
+    console.log("TRYING TO VERIFY SESSION TOKEN")
+    console.log(sessionToken)
+    console.log(account.session.token)
+	const isValidSessionToken = await bcrypt.verify(sessionToken, account.session.token);
+	if (!isValidSessionToken) return false;
+	return true;
+}
+
+export { db, accounts, stats, isValidSession };

@@ -1,8 +1,12 @@
 import config from "../config.js";
 import { app } from "./index.js";
+import { isValidSession } from "./db.js"
 import { randomCharacterFromString } from "./util.js";
 
-const rooms = new Map()
+/** @type {Map<string, Room>} */
+const RoomsMap = new Map()
+/** @type {Map<string, Player>} */
+const PlayersMap = new Map()
 
 function generateRoomCode() {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -15,7 +19,7 @@ function generateRoomCode() {
         code += randomCharacterFromString(chars);
     }
 
-    while (rooms.has(code)) {
+    while (RoomsMap.has(code)) {
         code = "";
         for (let i = 0; i < config.GAME.ROOM_CODE_LENGTH; i++) code += randomCharacterFromString(chars);
     }
@@ -23,69 +27,177 @@ function generateRoomCode() {
     return code
 }
 
-function createRoom() {
+export function createRoom() {
     const roomCode = generateRoomCode();
-    rooms.set(roomCode, new Room());
+    RoomsMap.set(roomCode, new Room(roomCode));
     return roomCode;
 }
 
 function closeRoom(roomCode) {
-    const socketsInRoom = rooms.get(roomCode).sockets
-    for (const socket of socketsInRoom) {
-        socket.close(4000, "Room Closed")
+    const playersInRoom = RoomsMap.get(roomCode).players
+    for (const player of playersInRoom) {
+        player.socket.close(4000, "Room Closed")
     }
 
-    rooms.delete(roomCode)
+    RoomsMap.delete(roomCode)
 }
 
 function cleanupRooms() {
-    // todo
+    const referenceTime = Date.now()
+    RoomsMap.forEach((room, roomCode) => {
+        const roomAge = referenceTime - room.createdAt
+        if (room.status === RoomStatus.WAITING && roomAge > config.GAME.IDLE_LOBBY_DELETION_TIME) closeRoom(roomCode);
+    })
 }
 
 const RoomStatus = {
     WAITING: 0,
-    ACTIVE: 1
+    ACTIVE: 1,
+    CLOSING: 2
+}
+
+const Hands = {
+    NONE: 0,
+    ROCK: 1,
+    PAPER: 2,
+    SCISSORS: 3
 }
 
 class Room {
-    constructor() {
-        this.sockets = new Set();
+    constructor(roomCode) {
+        /** @type {Map<string, Player>} */
+        this.players = new Map();
         this.status = RoomStatus.WAITING;
         this.round = 0;
+        this.createdAt = Date.now();
+        this.roomCode = roomCode;
     }
 
     get canJoin() {
-        if (this.sockets.size >= 2) return false;
+        if (this.players.size >= 2) return false;
         return true
     }
 
     sendMessage(message) {
-        for (const socket of this.sockets) socket.send(message);
+        for (const player of this.players.values()) player.socket.send(message);
     }
 
-    join(socket) {
-        if (!this.canJoin) return;
-        this.sockets.add(socket)
+    join(player) {
+        if (!this.canJoin) return false;
+        player.roomCode = this.roomCode;
+
+        this.players.set(player.username, player)
+        PlayersMap.set(player.username, player)
+
+        this.sendMessage(`joined ${player.username}`)
+
+        return true
     }
 
-    leave(socket) {
-        this.sockets.delete(socket);
+    leave(player, code, message) {
+        this.players.delete(player.username)
+        PlayersMap.delete(player.username)
+        player.socket.close(code, message)
+
+        if (this.status === RoomStatus.ACTIVE) {
+            const winner = this.players.values().next().value
+            this.endGame(winner, true)
+        }
+    }
+
+    checkRoundWinner() {
+        if (this.players.size !== 2) {
+            console.warn(`Room '${this.roomCode}' checkRoundWinner method was called while there ${this.players.size === 1 ? `was ${this.players.size} player` : `were ${this.players.size} players`}!`)
+            return
+        }
+        const playersIterator = this.players.values()
+        const p1 = playersIterator.next().value
+        const p2 = playersIterator.next().value
+
+        // one hasnt picked a hand yet
+        if (p1.hand === Hands.NONE || p2.hand === Hands.NONE) return;
+
+        // tie
+        if (p1.hand === p2.hand) {
+            this.sendMessage("point")
+            return;
+        }
+
+        const winningLookup = [
+        //     R       P      S
+            [ null,  true, false], // R
+            [false,  null,  true], // P
+            [ true, false,  null], // S
+        ]
+
+        // does p1 win
+        if (winningLookup[p1.hand][p2.hand]) {
+            p1.points++
+            this.sendMessage(`point ${p1.username} ${p1.points}`)
+        } else {
+            // p1 loses so p2 wins
+            p2.points++
+            this.sendMessage(`point ${p2.username} ${p2.points}`)
+        }
+
+        this.round++
+
+        // Check who wins
+        if (this.round === config.GAME.MAX_ROUNDS) {
+            const p1Wins = p1.points > p2.points;
+            if (p1Wins) this.endGame(p1)
+            else this.endGame(p2)
+        }
+    }
+
+    /**
+     * @param {Player} winner 
+     */
+    endGame(winner, opponent_left = false) {
+        this.status = RoomStatus.CLOSING
+
+        if (opponent_left) {
+            this.sendMessage(`win ${winner.username} true`)
+        } else {
+            this.sendMessage(`win ${winner.username}`)
+        }
+
+        for (const player of this.players.values()) {
+            this.players.delete(player.username)
+            PlayersMap.delete(player.username)
+            player.socket.close(4000, "Game ended.")
+        }
+    }
+}
+
+class Player {
+    constructor(username, socket) {
+        this.username = username || "Unknown Player";
+        this.points = 0;
+        this.hand = Hands.NONE;
+        this.roomCode = "";
+        this.socket = socket || null;
+    }
+
+    rock() { this.hand = Hands.ROCK }
+    paper() { this.hand = Hands.PAPER; }
+    scissors() { this.hand = Hands.SCISSORS; }
+    clearHand() { this.hand = Hands.NONE; }
+
+    kick(code, message) {
+        this.socket.close(code, message)
     }
 }
 
 export function registerWebSocketServer() {
     app.register(async function (fastify) {
         fastify.get(`/${config.WEBSOCKET_PATH}`, { websocket: true }, (socket, request) => {
-            socket.on("connection", ws => {
-                // on connect, join room, if no room, close socket
-            })
-
-            socket.on("message", message => {
+            socket.on("message", async message => {
                 const raw = message.toString();
                 const args = raw.split(" ");
                 const command = args.shift();
 
-                runCommands(command, args, socket)
+                await runCommands(command, args, request.query.roomCode, socket)
             })
 
             socket.on('close', () => {
@@ -97,7 +209,45 @@ export function registerWebSocketServer() {
     })
 }
 
-function runCommands(command, args, socket) {
+async function runCommands(command, args, roomCode, socket) {
     // TODO
-    //switch (command)
+    switch (command) {
+        case 'join': {
+            if (!roomCode) return socket.close(1002, "Expected room code.")
+            if (args.length !== 2) return socket.close(1002, "Expected 2 arguments.")
+
+            const username = args[0]
+            const sessionToken = args[1]
+
+            const room = RoomsMap.get(roomCode);
+
+            if (!room) return socket.close(4001, "Room not found.")
+            if (!room.canJoin) return socket.close(4001, "Room is full.")
+
+            if (PlayersMap.get(username)) return socket.close(4001, "Player is already in a room.")
+
+            if (!await isValidSession(username, sessionToken)) return socket.close(4001, "Invalid session.");
+            
+            const player = new Player(username, socket)
+            const joined = room.join(player);
+
+            if (!joined) return socket.close(4001, "Room is full.")
+
+            break;
+        }      
+        case 'play': {
+            console.log(`someone played ${args[0]}`)
+            break;
+        }
+        case 'ping': {
+            console.log(`pinged`)
+            socket.send('pong')
+            break;
+        }
+        default: {
+            // weird command, closing socket to prevent malicious clients
+            socket.close()
+            break;
+        }
+    }
 }

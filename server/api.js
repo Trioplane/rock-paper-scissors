@@ -5,6 +5,7 @@ import { app } from './index.js'
 import { AccountLoginSchema, AccountRegisterSchema } from "./schemas.js";
 import { wrap } from "./util.js";
 import config from "../config.js";
+import * as game from "./game.js"
 
 /**
  * @type {Record<string,import("fastify").FastifySchema>}
@@ -59,10 +60,11 @@ export function registerAPI() {
 
             // checks passed
             const sessionToken = crypto.randomBytes(256).toString("hex");
+            const hashedSessionToken = await bcrypt.hash(sessionToken)
             await accounts.updateOne({ username: account.username }, {
                 $set: {
                     session: {
-                        token: sessionToken,
+                        token: hashedSessionToken,
                         expires_at: Date.now() + config.SESSION_TOKEN_EXPIRES_AT
                     }
                 }
@@ -74,8 +76,9 @@ export function registerAPI() {
             })
         })
 
-        fastify.post('/api/create-room', async (request, reply) => {
-            // TODO
+        fastify.get('/api/create-room', async (request, reply) => {
+            const roomCode = game.createRoom();
+            return wrap.messageAndData("Created room", { roomCode })
         })
     })
     console.log("Registered API routes.")

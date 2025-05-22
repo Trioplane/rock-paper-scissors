@@ -5,11 +5,30 @@ import config from "../config.js";
 import { registerAPI } from "./api.js";
 import { registerWebSocketServer } from "./game.js";
 
-export const app = Fastify();
+const envToLogger = {
+	development: {
+		transport: {
+			target: "pino-pretty",
+			options: {
+				translateTime: "HH:MM:ss Z",
+				ignore: "pid,hostname",
+			},
+		},
+	},
+	production: true,
+	test: false,
+};
+
+export const app = Fastify({
+    logger: envToLogger[Deno.env.get("ENVIRONMENT")] ?? true
+});
 
 app.register(FastifyWebSocket)
 app.register(FastifyStatic, {
-    root: config.CLIENT_DIR
+    root: config.CLIENT_DIR,
+    prefix: "/",
+    index: "index.html",
+    redirect: true
 })
 
 registerAPI()
